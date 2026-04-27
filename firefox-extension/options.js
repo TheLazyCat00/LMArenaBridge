@@ -34,18 +34,34 @@ function setText(id, value) {
   }
 }
 
+function setError(message) {
+  setText("validationError", message || "");
+}
+
+function setSuccess(message) {
+  setText("saveStatus", message || "");
+}
+
 async function loadSettings() {
-  const stored = await extensionApi.storage.local.get(DEFAULT_SETTINGS);
-  document.getElementById("bridgeBaseUrl").value = stored.bridgeBaseUrl || "";
-  document.getElementById("userscriptProxySecret").value = stored.userscriptProxySecret || "";
-  document.getElementById("pollTimeoutSeconds").value = stored.pollTimeoutSeconds ?? 25;
-  document.getElementById("arenaPreferredOrigin").value =
-    stored.arenaPreferredOrigin || "https://lmarena.ai";
+  try {
+    const stored = await extensionApi.storage.local.get(DEFAULT_SETTINGS);
+    document.getElementById("bridgeBaseUrl").value = stored.bridgeBaseUrl || "";
+    document.getElementById("userscriptProxySecret").value = stored.userscriptProxySecret || "";
+    document.getElementById("pollTimeoutSeconds").value = stored.pollTimeoutSeconds ?? 25;
+    document.getElementById("arenaPreferredOrigin").value =
+      stored.arenaPreferredOrigin || "https://lmarena.ai";
+  } catch (error) {
+    setError("Failed to load settings.");
+  }
 }
 
 async function loadStatus() {
-  const stored = await extensionApi.storage.local.get({ proxyStatus: {} });
-  updateStatusDisplay(stored.proxyStatus || {});
+  try {
+    const stored = await extensionApi.storage.local.get({ proxyStatus: {} });
+    updateStatusDisplay(stored.proxyStatus || {});
+  } catch (error) {
+    setError("Failed to load status.");
+  }
 }
 
 function updateStatusDisplay(status) {
@@ -59,12 +75,10 @@ function updateStatusDisplay(status) {
 async function saveSettings() {
   const baseUrl = document.getElementById("bridgeBaseUrl").value;
   const validation = normalizeBaseUrl(baseUrl);
-  const errorEl = document.getElementById("validationError");
-  const statusEl = document.getElementById("saveStatus");
-  errorEl.textContent = "";
-  statusEl.textContent = "";
+  setError("");
+  setSuccess("");
   if (!validation.ok) {
-    errorEl.textContent = validation.error;
+    setError(validation.error);
     return;
   }
   const settings = {
@@ -73,12 +87,16 @@ async function saveSettings() {
     pollTimeoutSeconds: Number(document.getElementById("pollTimeoutSeconds").value || 25),
     arenaPreferredOrigin: document.getElementById("arenaPreferredOrigin").value,
   };
-  await extensionApi.storage.local.set(settings);
-  statusEl.textContent = "Settings saved.";
+  try {
+    await extensionApi.storage.local.set(settings);
+    setSuccess("Settings saved.");
+  } catch (error) {
+    setError("Failed to save settings.");
+  }
 }
 
 document.getElementById("saveButton").addEventListener("click", () => {
-  saveSettings().catch(() => {});
+  saveSettings();
 });
 
 extensionApi.storage.onChanged.addListener((changes, area) => {
@@ -90,5 +108,5 @@ extensionApi.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-loadSettings().catch(() => {});
-loadStatus().catch(() => {});
+loadSettings();
+loadStatus();

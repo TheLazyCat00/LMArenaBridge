@@ -25,6 +25,7 @@ const statusState = {
 let pollLoopRunning = false;
 let pollBackoffSeconds = 0;
 let activeJobContext = null;
+let pollLoopEnabled = true;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -269,17 +270,27 @@ async function pollLoop() {
     return;
   }
   pollLoopRunning = true;
-  while (true) {
+  while (pollLoopEnabled) {
     await pollOnce();
   }
 }
 
 extensionApi.runtime.onInstalled.addListener(() => {
-  pollLoop().catch(() => {});
+  pollLoop().catch((error) => {
+    updateStatus({
+      state: "error",
+      lastError: error instanceof Error ? error.message : "Polling failed to start.",
+    });
+  });
 });
 
 extensionApi.runtime.onStartup.addListener(() => {
-  pollLoop().catch(() => {});
+  pollLoop().catch((error) => {
+    updateStatus({
+      state: "error",
+      lastError: error instanceof Error ? error.message : "Polling failed to start.",
+    });
+  });
 });
 
 extensionApi.runtime.onMessage.addListener((message) => {
@@ -315,4 +326,15 @@ extensionApi.runtime.onMessage.addListener((message) => {
   })();
 });
 
-pollLoop().catch(() => {});
+pollLoop().catch((error) => {
+  updateStatus({
+    state: "error",
+    lastError: error instanceof Error ? error.message : "Polling failed to start.",
+  });
+});
+
+if (extensionApi.runtime.onSuspend) {
+  extensionApi.runtime.onSuspend.addListener(() => {
+    pollLoopEnabled = false;
+  });
+}
