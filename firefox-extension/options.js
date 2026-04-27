@@ -49,7 +49,7 @@ async function loadSettings() {
     document.getElementById("userscriptProxySecret").value = stored.userscriptProxySecret || "";
     document.getElementById("pollTimeoutSeconds").value = stored.pollTimeoutSeconds ?? 25;
     document.getElementById("arenaPreferredOrigin").value =
-      stored.arenaPreferredOrigin || "https://lmarena.ai";
+      stored.arenaPreferredOrigin || DEFAULT_SETTINGS.arenaPreferredOrigin;
   } catch (error) {
     setError("Failed to load settings.");
   }

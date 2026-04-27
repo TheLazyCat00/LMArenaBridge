@@ -4,6 +4,9 @@ const POLL_PATH = "/api/v1/userscript/poll";
 const PUSH_PATH = "/api/v1/userscript/push";
 const SECRET_HEADER = "X-LMBridge-Secret";
 const ALLOWED_HOSTS = new Set(["arena.ai", "www.arena.ai", "lmarena.ai", "www.lmarena.ai"]);
+const MIN_BACKOFF_SECONDS = 1;
+const MAX_BACKOFF_SECONDS = 30;
+const MAX_SEND_ATTEMPTS = 5;
 
 const DEFAULT_SETTINGS = {
   bridgeBaseUrl: "http://127.0.0.1:8000",
@@ -88,7 +91,9 @@ function isAllowedJobUrl(rawUrl) {
 }
 
 function nextBackoff() {
-  pollBackoffSeconds = pollBackoffSeconds ? Math.min(pollBackoffSeconds * 2, 30) : 1;
+  pollBackoffSeconds = pollBackoffSeconds
+    ? Math.min(pollBackoffSeconds * 2, MAX_BACKOFF_SECONDS)
+    : MIN_BACKOFF_SECONDS;
   return pollBackoffSeconds;
 }
 
@@ -135,13 +140,12 @@ async function waitForTabComplete(tabId) {
 }
 
 async function sendJobToTab(tabId, message) {
-  const attempts = 5;
-  for (let i = 0; i < attempts; i += 1) {
+  for (let i = 0; i < MAX_SEND_ATTEMPTS; i += 1) {
     try {
       await extensionApi.tabs.sendMessage(tabId, message);
       return true;
     } catch (error) {
-      if (i === attempts - 1) {
+      if (i === MAX_SEND_ATTEMPTS - 1) {
         throw error;
       }
       await sleep(500);

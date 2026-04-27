@@ -38,6 +38,7 @@ function injectPageBridge() {
       const MESSAGE_SOURCE = ${JSON.stringify(MESSAGE_SOURCE)};
       const MAX_LINES = 50;
       const MAX_BYTES = 32768;
+      const CHALLENGE_CHECK_BYTES = 1024;
       let runningJobId = null;
 
       function sendUpdate(jobId, update) {
@@ -150,7 +151,7 @@ function injectPageBridge() {
               challengeError(jobId);
               return;
             }
-            checkedChallenge = sample.length >= 1024;
+            checkedChallenge = sample.length >= CHALLENGE_CHECK_BYTES;
           }
           buffer += chunk;
           buffer = buffer.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
