@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>LMArenaBridge Proxy Options</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 24px;
+      }
+      label {
+        display: block;
+        margin-top: 12px;
+        font-weight: 600;
+      }
+      input,
+      select {
+        width: 420px;
+        max-width: 100%;
+        padding: 6px;
+        margin-top: 6px;
+      }
+      .status {
+        margin-top: 20px;
+        padding: 12px;
+        background: #f5f5f5;
+        border-radius: 6px;
+      }
+      .error {
+        color: #b00020;
+        margin-top: 8px;
+      }
+      .success {
+        color: #2e7d32;
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>LMArenaBridge Userscript Proxy</h1>
+
+    <label for="bridgeBaseUrl">Bridge Base URL (localhost only)</label>
+    <input id="bridgeBaseUrl" type="text" />
+
+    <label for="userscriptProxySecret">Userscript Proxy Secret (optional)</label>
+    <input id="userscriptProxySecret" type="password" />
+
+    <label for="pollTimeoutSeconds">Poll Timeout (seconds)</label>
+    <input id="pollTimeoutSeconds" type="number" min="0" max="60" />
+
+    <label for="arenaPreferredOrigin">Preferred Arena Origin</label>
+    <select id="arenaPreferredOrigin">
+      <option value="https://lmarena.ai">https://lmarena.ai</option>
+      <option value="https://arena.ai">https://arena.ai</option>
+    </select>
+
+    <div class="error" id="validationError"></div>
+    <div class="success" id="saveStatus"></div>
+
+    <button id="saveButton">Save Settings</button>
+
+    <div class="status">
+      <h2>Status</h2>
+      <div><strong>State:</strong> <span id="statusState">idle</span></div>
+      <div><strong>Last Error:</strong> <span id="statusError">None</span></div>
+      <div><strong>Last Poll:</strong> <span id="statusPoll">Never</span></div>
+      <div><strong>Active Job:</strong> <span id="statusJob">None</span></div>
+      <div><strong>Backoff:</strong> <span id="statusBackoff">0s</span></div>
+    </div>
+
+    <script src="options.js"></script>
+  </body>
+</html>
