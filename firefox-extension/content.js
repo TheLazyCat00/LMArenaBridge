@@ -110,7 +110,10 @@ function injectPageBridge() {
           return;
         }
 
-        const reader = response.body && response.body.getReader ? response.body.getReader() : null;
+        const reader =
+          response.body && typeof response.body.getReader === "function"
+            ? response.body.getReader()
+            : null;
         if (!reader) {
           const text = await response.text();
           if (detectChallenge(contentType, text)) {

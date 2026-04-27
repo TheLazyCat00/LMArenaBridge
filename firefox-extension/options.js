@@ -48,7 +48,7 @@ async function loadSettings() {
     const stored = await extensionApi.storage.local.get(DEFAULT_SETTINGS);
     document.getElementById("bridgeBaseUrl").value = stored.bridgeBaseUrl || "";
     document.getElementById("userscriptProxySecret").value = stored.userscriptProxySecret || "";
-    document.getElementById("pollTimeoutSeconds").value = stored.pollTimeoutSeconds ?? 25;
+    document.getElementById("pollTimeoutSeconds").value = stored.pollTimeoutSeconds;
     document.getElementById("arenaPreferredOrigin").value =
       stored.arenaPreferredOrigin || DEFAULT_SETTINGS.arenaPreferredOrigin;
   } catch (error) {

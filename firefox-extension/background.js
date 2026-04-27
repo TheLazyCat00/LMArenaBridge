@@ -140,12 +140,12 @@ async function waitForTabComplete(tabId) {
 }
 
 async function sendJobToTab(tabId, message) {
-  for (let i = 0; i < MAX_SEND_ATTEMPTS; i += 1) {
+  for (let attempt = 0; attempt < MAX_SEND_ATTEMPTS; attempt += 1) {
     try {
       await extensionApi.tabs.sendMessage(tabId, message);
       return true;
     } catch (error) {
-      if (i === MAX_SEND_ATTEMPTS - 1) {
+      if (attempt === MAX_SEND_ATTEMPTS - 1) {
         throw error;
       }
       await sleep(500);
@@ -280,23 +280,6 @@ async function pollLoop() {
   pollLoopRunning = false;
 }
 
-extensionApi.runtime.onInstalled.addListener(() => {
-  pollLoop().catch((error) => {
-    updateStatus({
-      state: "error",
-      lastError: error instanceof Error ? error.message : "Polling failed to start.",
-    });
-  });
-});
-
-extensionApi.runtime.onStartup.addListener(() => {
-  pollLoop().catch((error) => {
-    updateStatus({
-      state: "error",
-      lastError: error instanceof Error ? error.message : "Polling failed to start.",
-    });
-  });
-});
 
 extensionApi.runtime.onMessage.addListener((message) => {
   if (!message || message.type !== "lmbridge-proxy-update") {
