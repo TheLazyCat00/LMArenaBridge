@@ -2772,12 +2772,11 @@ async def api_chat_completions(request: Request, api_key: dict = Depends(rate_li
                             stream_context = None
                             transport_used = "httpx"
                             
-                            # Userscript proxy is now a backup-only transport.  We check
-                            # availability here but defer actually using it until after
-                            # browser transports have been attempted.
+                            # Userscript proxy is typically a backup transport unless the prefer flag is enabled.
                             use_userscript = False
                             cfg_now = None
                             userscript_proxy_available = False
+                            prefer_userscript_proxy_for_streaming = False
                             if (
                                 use_browser_transports
                                 and not disable_userscript_for_request
@@ -2813,7 +2812,26 @@ async def api_chat_completions(request: Request, api_key: dict = Depends(rate_li
 
                                 if proxy_active:
                                     userscript_proxy_available = True
-                                    debug_print("🌐 Userscript Proxy is ACTIVE (will use as backup after browser transports).")
+                                    prefer_env = str(os.environ.get("LM_BRIDGE_PREFER_USERSCRIPT_PROXY") or "").strip()
+                                    prefer_override = prefer_env == "1"
+                                    if prefer_override:
+                                        prefer_userscript_proxy_for_streaming = True
+                                    else:
+                                        try:
+                                            prefer_userscript_proxy_for_streaming = bool(
+                                                (cfg_now or {}).get("prefer_userscript_proxy_for_streaming", False)
+                                            )
+                                        except Exception:
+                                            prefer_userscript_proxy_for_streaming = False
+                                    if prefer_userscript_proxy_for_streaming:
+                                        debug_print(
+                                            "⭐ Prefer userscript proxy enabled and ACTIVE: routing streaming request "
+                                            "through userscript proxy (skipping Camoufox/Chrome)."
+                                        )
+                                    else:
+                                        debug_print(
+                                            "🌐 Userscript Proxy is ACTIVE (will use as backup after browser transports)."
+                                        )
                                 # Default behavior: mint in-page (higher success rate than side-channel cached tokens).
                                 # Optional: allow pre-filling a cached token for speed via config flag.
                                 try:
@@ -2833,6 +2851,46 @@ async def api_chat_completions(request: Request, api_key: dict = Depends(rate_li
                                     if cached:
                                         debug_print(f"🔐 Using cached reCAPTCHA v3 token for proxy (len={len(str(cached))})")
                                         payload["recaptchaV3Token"] = cached
+                            
+                            if (
+                                stream_context is None
+                                and userscript_proxy_available
+                                and prefer_userscript_proxy_for_streaming
+                                and not disable_userscript_for_request
+                            ):
+                                use_userscript = True
+                                debug_print(
+                                    f"📫 Prefer userscript proxy: delegating request to Userscript Proxy "
+                                    f"(poll active {int(time.time() - last_userscript_poll)}s ago)..."
+                                )
+                                proxy_auth_token = str(current_token or "").strip()
+                                try:
+                                    if (
+                                        proxy_auth_token
+                                        and not str(proxy_auth_token).startswith("base64-")
+                                        and is_arena_auth_token_expired(proxy_auth_token, skew_seconds=0)
+                                    ):
+                                        proxy_auth_token = ""
+                                except Exception:
+                                    pass
+                                try:
+                                    stream_context = await fetch_via_proxy_queue(
+                                        url=url,
+                                        payload=payload if isinstance(payload, dict) else {},
+                                        http_method=http_method,
+                                        timeout_seconds=120,
+                                        streaming=True,
+                                        auth_token=proxy_auth_token,
+                                    )
+                                except Exception as e:
+                                    debug_print(
+                                        f"⚠️ Prefer userscript proxy failed ({e}); falling back to other transports."
+                                    )
+                                    stream_context = None
+                                if stream_context is None:
+                                    use_userscript = False
+                                else:
+                                    transport_used = "userscript"
 
                             # Strict models: when we're about to fall back to buffered browser fetch transports (not the
                             # streaming proxy), a side-channel token can avoid hangs while grecaptcha loads in-page.

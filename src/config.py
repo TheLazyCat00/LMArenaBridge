@@ -69,6 +69,7 @@ def _apply_config_defaults(config: dict) -> None:
     config.setdefault("camoufox_proxy_window_mode", constants.DEFAULT_CAMOUFOX_PROXY_WINDOW_MODE)
     config.setdefault("camoufox_fetch_window_mode", constants.DEFAULT_CAMOUFOX_FETCH_WINDOW_MODE)
     config.setdefault("chrome_fetch_window_mode", constants.DEFAULT_CHROME_FETCH_WINDOW_MODE)
+    config.setdefault("prefer_userscript_proxy_for_streaming", False)
     
     # Normalize api_keys
     if isinstance(config.get("api_keys"), list):
@@ -183,4 +184,5 @@ def get_default_config() -> dict:
         "camoufox_proxy_window_mode": constants.DEFAULT_CAMOUFOX_PROXY_WINDOW_MODE,
         "camoufox_fetch_window_mode": constants.DEFAULT_CAMOUFOX_FETCH_WINDOW_MODE,
         "chrome_fetch_window_mode": constants.DEFAULT_CHROME_FETCH_WINDOW_MODE,
+        "prefer_userscript_proxy_for_streaming": False,
     }
