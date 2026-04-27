@@ -31,7 +31,7 @@ function injectPageBridge() {
   }
   window.__lmbridgeProxyInjected = true;
   const script = document.createElement("script");
-  script.textContent = `
+  script.textContent = String.raw`
     (() => {
       if (window.__lmbridgeProxyBridgeReady) return;
       window.__lmbridgeProxyBridgeReady = true;
@@ -117,8 +117,8 @@ function injectPageBridge() {
             return;
           }
           const batcher = createBatcher(jobId);
-          const normalized = text.replace(/\\r\\n/g, "\\n").replace(/\\r/g, "\\n");
-          const parts = normalized.split("\\n");
+          const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+          const parts = normalized.split("\n");
           for (const part of parts) {
             if (part !== "") {
               batcher.pushLine(part);
@@ -153,8 +153,8 @@ function injectPageBridge() {
             checkedChallenge = sample.length >= 1024;
           }
           buffer += chunk;
-          buffer = buffer.replace(/\\r\\n/g, "\\n").replace(/\\r/g, "\\n");
-          const parts = buffer.split("\\n");
+          buffer = buffer.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+          const parts = buffer.split("\n");
           buffer = parts.pop() || "";
           for (const part of parts) {
             batcher.pushLine(part);
