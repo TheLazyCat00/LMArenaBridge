@@ -14,7 +14,7 @@ import hashlib
 from collections import defaultdict
 from contextlib import asynccontextmanager, AsyncExitStack
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlsplit, urlparse, parse_qs
 
@@ -1619,22 +1619,25 @@ async def userscript_status(request: Request):
     """
     _userscript_proxy_check_secret(request)
     cfg = get_config()
+    now = float(time.time())
+
+    def _safe_float(value: Any) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
     poll_timeout_seconds = 25
     try:
         poll_timeout_seconds = int(cfg.get("userscript_proxy_poll_timeout_seconds", 25))
     except (TypeError, ValueError):
         poll_timeout_seconds = 25
+    # Match _userscript_proxy_is_active window clamping.
     active_window_seconds = max(10, min(poll_timeout_seconds + 10, 90))
-    try:
-        last_poll = max(float(USERSCRIPT_PROXY_LAST_POLL_AT or 0.0), float(last_userscript_poll or 0.0))
-    except (TypeError, ValueError):
-        last_poll = float(USERSCRIPT_PROXY_LAST_POLL_AT or 0.0)
-    try:
-        age_seconds = float(time.time()) - float(last_poll)
-    except (TypeError, ValueError):
-        age_seconds = None
+    last_poll = max(_safe_float(USERSCRIPT_PROXY_LAST_POLL_AT), _safe_float(last_userscript_poll))
+    age_seconds = now - last_poll
     return {
-        "now_unix": float(time.time()),
+        "now_unix": now,
         "last_poll_unix": last_poll,
         "last_poll_age_seconds": age_seconds,
         "poll_timeout_seconds": poll_timeout_seconds,
