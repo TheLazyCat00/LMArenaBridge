@@ -52,8 +52,34 @@ There is an optional **userscript proxy** path that can improve reliability for 
 - The userscript is optional and only helpful in specific environments.
 - If you don’t want to use it, you can ignore it entirely.
 - When enabled, it acts as a helper to send requests via a browser tab and can improve reCAPTCHA success rates.
+- Requires the Firefox extension userscript proxy to be installed, running, and polling (`/api/v1/userscript/poll`).
 
 If you want this documented more deeply, let us know what environment you’re on and we’ll add step-by-step instructions.
+
+**Prefer userscript proxy for streaming (optional, default: false):**
+
+Add to `config.json`:
+```json
+{
+  "prefer_userscript_proxy_for_streaming": false
+}
+```
+
+Env var override (takes precedence over config):
+```bash
+LM_BRIDGE_PREFER_USERSCRIPT_PROXY=1
+```
+
+When enabled **and** the userscript proxy is active, streaming requests are routed through the userscript proxy first (skipping Camoufox/Chrome for that request).
+
+**Manual verification steps:**
+1. Start the bridge with default config (`prefer_userscript_proxy_for_streaming: false`) and make a streaming request → behavior unchanged (Camoufox/Chrome attempts still happen first).
+2. Enable the prefer flag (or set `LM_BRIDGE_PREFER_USERSCRIPT_PROXY=1`) and ensure the extension is polling:
+   - Make a streaming request
+   - Observe server logs: “Prefer userscript proxy enabled and ACTIVE...”
+   - `/api/v1/userscript/poll` returns 200 with a job (not only 204)
+   - `/api/v1/userscript/push` receives streamed lines
+   - Client receives streamed output
 
 
 ### 1. Get your Authentication Token
