@@ -1499,11 +1499,7 @@ async def userscript_poll(request: Request):
     """
     _userscript_proxy_check_secret(request)
 
-    global USERSCRIPT_PROXY_LAST_POLL_AT, last_userscript_poll
-    now = time.time()
-    USERSCRIPT_PROXY_LAST_POLL_AT = now
-    # Keep legacy proxy detection working too.
-    last_userscript_poll = now
+    _touch_userscript_poll()
 
     try:
         data = await request.json()
@@ -1557,6 +1553,7 @@ async def userscript_push(request: Request):
     Receives streamed lines from the userscript proxy and feeds them into the waiting request.
     """
     _userscript_proxy_check_secret(request)
+    _touch_userscript_poll()
 
     try:
         data = await request.json()
@@ -1613,6 +1610,37 @@ async def userscript_push(request: Request):
         await job["lines_queue"].put(None)
 
     return {"status": "ok"}
+
+
+@app.get("/api/v1/userscript/status")
+async def userscript_status(request: Request):
+    """
+    Status endpoint for userscript-proxy liveness debugging.
+    """
+    _userscript_proxy_check_secret(request)
+    cfg = get_config()
+    poll_timeout_seconds = 25
+    try:
+        poll_timeout_seconds = int(cfg.get("userscript_proxy_poll_timeout_seconds", 25))
+    except Exception:
+        poll_timeout_seconds = 25
+    active_window_seconds = max(10, min(poll_timeout_seconds + 10, 90))
+    try:
+        last_poll = max(float(USERSCRIPT_PROXY_LAST_POLL_AT or 0.0), float(last_userscript_poll or 0.0))
+    except Exception:
+        last_poll = float(USERSCRIPT_PROXY_LAST_POLL_AT or 0.0)
+    try:
+        age_seconds = float(time.time()) - float(last_poll)
+    except Exception:
+        age_seconds = None
+    return {
+        "now_unix": float(time.time()),
+        "last_poll_unix": last_poll,
+        "last_poll_age_seconds": age_seconds,
+        "poll_timeout_seconds": poll_timeout_seconds,
+        "active_window_seconds": active_window_seconds,
+        "active": _userscript_proxy_is_active(cfg),
+    }
 
 
 # --- OpenAI Compatible API Endpoints ---
