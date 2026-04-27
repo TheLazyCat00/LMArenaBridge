@@ -1622,16 +1622,16 @@ async def userscript_status(request: Request):
     poll_timeout_seconds = 25
     try:
         poll_timeout_seconds = int(cfg.get("userscript_proxy_poll_timeout_seconds", 25))
-    except Exception:
+    except (TypeError, ValueError):
         poll_timeout_seconds = 25
     active_window_seconds = max(10, min(poll_timeout_seconds + 10, 90))
     try:
         last_poll = max(float(USERSCRIPT_PROXY_LAST_POLL_AT or 0.0), float(last_userscript_poll or 0.0))
-    except Exception:
+    except (TypeError, ValueError):
         last_poll = float(USERSCRIPT_PROXY_LAST_POLL_AT or 0.0)
     try:
         age_seconds = float(time.time()) - float(last_poll)
-    except Exception:
+    except (TypeError, ValueError):
         age_seconds = None
     return {
         "now_unix": float(time.time()),
