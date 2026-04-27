@@ -1,0 +1,29 @@
+{
+  "manifest_version": 2,
+  "name": "LMArenaBridge Userscript Proxy",
+  "version": "1.0.0",
+  "description": "Firefox extension proxy client for LMArenaBridge userscript jobs.",
+  "permissions": [
+    "tabs",
+    "storage",
+    "https://arena.ai/*",
+    "https://lmarena.ai/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": true
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://arena.ai/*", "https://lmarena.ai/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
+}
