@@ -277,6 +277,7 @@ async function pollLoop() {
   while (pollLoopEnabled) {
     await pollOnce();
   }
+  pollLoopRunning = false;
 }
 
 extensionApi.runtime.onInstalled.addListener(() => {
@@ -340,5 +341,13 @@ pollLoop().catch((error) => {
 if (extensionApi.runtime.onSuspend) {
   extensionApi.runtime.onSuspend.addListener(() => {
     pollLoopEnabled = false;
+    if (activeJobContext) {
+      const jobId = activeJobContext.jobId;
+      pushUpdate(jobId, {
+        error: "Extension suspended before job completion.",
+        done: true,
+      }).catch(() => {});
+      finalizeJob(jobId).catch(() => {});
+    }
   });
 }

@@ -24,7 +24,8 @@ function normalizeBaseUrl(value) {
   if (!["127.0.0.1", "localhost"].includes(parsed.hostname)) {
     return { ok: false, error: "Bridge base URL must be localhost or 127.0.0.1." };
   }
-  return { ok: true, url: parsed.toString() };
+  const basePath = parsed.pathname.replace(/\/$/, "");
+  return { ok: true, url: `${parsed.origin}${basePath}` };
 }
 
 function setText(id, value) {

@@ -35,7 +35,7 @@ function injectPageBridge() {
     (() => {
       if (window.__lmbridgeProxyBridgeReady) return;
       window.__lmbridgeProxyBridgeReady = true;
-      const MESSAGE_SOURCE = ${JSON.stringify(MESSAGE_SOURCE)};
+      const MESSAGE_SOURCE = "lmbridge-proxy-page";
       const MAX_LINES = 50;
       const MAX_BYTES = 32768;
       const CHALLENGE_CHECK_BYTES = 1024;
@@ -141,7 +141,7 @@ function injectPageBridge() {
           }
           const chunk = decoder.decode(value, { stream: true });
           if (!checkedChallenge) {
-            const sample = (buffer + chunk).slice(0, 4096);
+            const sample = (buffer + chunk).slice(0, CHALLENGE_CHECK_BYTES);
             if (detectChallenge(contentType, sample)) {
               try {
                 await reader.cancel();
