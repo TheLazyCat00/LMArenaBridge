@@ -227,7 +227,7 @@ async def upload_image_to_lmarena(image_data: bytes, mime_type: str, filename: s
     raise HTTPException(
         status_code=503,
         detail=(
-            "Image upload is unavailable in proxy-only mode. Use text-only prompts."
+            "Image upload is unavailable in proxy-only mode. The userscript proxy does not support image uploads yet."
         ),
     )
 
@@ -289,7 +289,7 @@ async def process_message_content(content, model_capabilities: dict) -> tuple[st
                     raise HTTPException(
                         status_code=503,
                         detail=(
-                            "Image inputs are unavailable in proxy-only mode. Use text-only prompts."
+                            "Image inputs are unavailable in proxy-only mode. The userscript proxy does not support image uploads yet."
                         ),
                     )
                 elif part.get('type') == 'image_url' and not supports_images:

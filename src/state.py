@@ -4,7 +4,7 @@ Holds in-memory state that needs to be shared across modules.
 """
 
 from collections import defaultdict
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import time
 
 

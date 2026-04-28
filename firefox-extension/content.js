@@ -50,10 +50,10 @@ function injectPageBridge() {
       }
 
       function challengeError(jobId, contentType, preview) {
-        const snippet = String(preview || "").slice(0, BODY_PREVIEW_BYTES);
+        const previewText = String(preview || "").slice(0, BODY_PREVIEW_BYTES);
         sendUpdate(jobId, {
           error: "Challenge requires user action in the Arena tab",
-          body_preview: snippet,
+          body_preview: previewText,
           body_preview_content_type: contentType || "",
           done: true,
         });
@@ -117,6 +117,7 @@ function injectPageBridge() {
         if (response.status >= 400) {
           let errorText = "";
           try {
+            // For error responses we intentionally consume the body once to generate a preview.
             errorText = await response.text();
           } catch (error) {
             errorText = "";

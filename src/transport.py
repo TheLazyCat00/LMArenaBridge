@@ -18,7 +18,6 @@ from fastapi import HTTPException, Request
 from . import constants as _constants
 
 HTTPStatus = _constants.HTTPStatus
-DEFAULT_PICKUP_TIMEOUT_SECONDS = _constants.DEFAULT_USERSCRIPT_PROXY_PICKUP_TIMEOUT_SECONDS
 
 
 def _m():
@@ -28,6 +27,7 @@ def _m():
 
 
 class BrowserFetchStreamResponse:
+    """Legacy response wrapper for buffered/streamed proxy responses."""
     def __init__(
         self,
         status_code: int,
@@ -537,16 +537,16 @@ async def fetch_via_proxy_queue(
     if proxy_stream is None:
         return None
     job_id = str(getattr(proxy_stream, "job_id", "") or "")
-    pickup_timeout = DEFAULT_PICKUP_TIMEOUT_SECONDS
+    pickup_timeout = _constants.DEFAULT_USERSCRIPT_PROXY_PICKUP_TIMEOUT_SECONDS
     try:
         pickup_timeout = int(
             (_m().get_config() or {}).get(
                 "userscript_proxy_pickup_timeout_seconds",
-                DEFAULT_PICKUP_TIMEOUT_SECONDS,
+                _constants.DEFAULT_USERSCRIPT_PROXY_PICKUP_TIMEOUT_SECONDS,
             )
         )
     except Exception:
-        pickup_timeout = DEFAULT_PICKUP_TIMEOUT_SECONDS
+        pickup_timeout = _constants.DEFAULT_USERSCRIPT_PROXY_PICKUP_TIMEOUT_SECONDS
     pickup_timeout = max(3, min(pickup_timeout, 60))
     if job_id:
         picked = await _wait_for_userscript_pickup(job_id, pickup_timeout)

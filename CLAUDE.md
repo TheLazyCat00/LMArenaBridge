@@ -12,7 +12,7 @@ python -m src.main
 python -m pytest tests/
 
 # Run a single test file
-python -m pytest tests/test_userscript_proxy_url_normalization.py -v
+python -m pytest tests/ -v
 
 # Syntax check
 python -c "import ast; ast.parse(open('src/main.py', encoding='utf-8').read()); print('OK')"
