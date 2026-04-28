@@ -27,6 +27,7 @@ def _m():
 
 
 class BrowserFetchStreamResponse:
+    """Legacy response wrapper for buffered/streamed proxy responses."""
     def __init__(
         self,
         status_code: int,
@@ -36,6 +37,7 @@ class BrowserFetchStreamResponse:
         url: str = "",
         lines_queue: Optional[asyncio.Queue] = None,
         done_event: Optional[asyncio.Event] = None,
+        job_id: Optional[str] = None,
     ):
         self.status_code = int(status_code or 0)
         self.headers = headers or {}
@@ -44,6 +46,7 @@ class BrowserFetchStreamResponse:
         self._url = str(url or "")
         self._lines_queue = lines_queue
         self._done_event = done_event
+        self.job_id = str(job_id or "")
 
     async def __aenter__(self):
         return self
@@ -329,8 +332,8 @@ class UserscriptProxyStreamResponse:
     async def aclose(self) -> None:
         # Do not eagerly delete completed jobs here.
         #
-        # Callers may need to inspect `status_code`/`error` after the context exits (e.g. to decide whether to
-        # fall back to Chrome fetch). Jobs are pruned by `_cleanup_userscript_proxy_jobs()` on a short TTL.
+        # Callers may need to inspect `status_code`/`error` after the context exits for diagnostics or
+        # to build error responses. Jobs are pruned by `_cleanup_userscript_proxy_jobs()` on a short TTL.
         return None
 
     async def aiter_lines(self):
@@ -426,7 +429,6 @@ async def fetch_lmarena_stream_via_userscript_proxy(
     url: str,
     payload: dict,
     timeout_seconds: int = 120,
-    auth_token: str = "",
     headers: Optional[dict] = None,
 ) -> Optional[UserscriptProxyStreamResponse]:
     config = _m().get_config()
@@ -471,11 +473,6 @@ async def fetch_lmarena_stream_via_userscript_proxy(
         "upstream_fetch_started_at_monotonic": None,
         "url": str(url),
         "method": str(http_method or "POST"),
-        # Per-request auth token (do not mutate persisted config). The proxy worker uses this to set
-        # the `arena-auth-prod-v1` cookie before executing the in-page fetch.
-        "arena_auth_token": str(auth_token or "").strip(),
-        "recaptcha_sitekey": "",
-        "recaptcha_action": "",
         "payload": {
             "url": proxy_url,
             "method": str(http_method or "POST"),
@@ -489,6 +486,8 @@ async def fetch_lmarena_stream_via_userscript_proxy(
         "done": False,
         "status_code": 200,
         "headers": {},
+        "body_preview": "",
+        "body_preview_content_type": "",
         "error": None,
     }
     _m()._USERSCRIPT_PROXY_JOBS[job_id] = job
@@ -497,141 +496,93 @@ async def fetch_lmarena_stream_via_userscript_proxy(
     return UserscriptProxyStreamResponse(job_id, timeout_seconds=timeout_seconds)
 
 
+async def _wait_for_userscript_pickup(job_id: str, timeout_seconds: int) -> bool:
+    job = _m()._USERSCRIPT_PROXY_JOBS.get(str(job_id))
+    if not isinstance(job, dict):
+        return False
+    picked = job.get("picked_up_event")
+    if isinstance(picked, asyncio.Event) and picked.is_set():
+        return True
+    if not isinstance(picked, asyncio.Event):
+        return True
+    try:
+        await asyncio.wait_for(picked.wait(), timeout=max(1, int(timeout_seconds)))
+        return True
+    except Exception:
+        await _finalize_userscript_proxy_job(
+            job_id,
+            error="userscript proxy did not pick up job in time",
+            remove=False,
+        )
+        return False
+
+
 async def fetch_via_proxy_queue(
     url: str,
     payload: object,
     http_method: str = "POST",
     timeout_seconds: int = 120,
     streaming: bool = False,
-    auth_token: str = "",
     headers: Optional[dict] = None,
 ) -> Optional[object]:
-    """
-    Fallback transport: delegates the request to a connected Userscript via the Task Queue.
-    """
+    """Delegate the request to a connected userscript proxy via the task queue."""
     # Prefer the streaming-capable proxy endpoints when available.
     proxy_stream = await _m().fetch_lmarena_stream_via_userscript_proxy(
         http_method=http_method,
         url=url,
         payload=payload if payload is not None else {},
         timeout_seconds=timeout_seconds,
-        auth_token=auth_token,
         headers=headers,
     )
-    if proxy_stream is not None:
-        if streaming:
-            return proxy_stream
-
-        # Non-streaming call: buffer everything and return a plain response wrapper.
-        collected_lines: list[str] = []
-        async with proxy_stream as response:
-            async for line in response.aiter_lines():
-                collected_lines.append(str(line))
-
-        job_error = ""
-        try:
-            job = _m()._USERSCRIPT_PROXY_JOBS.get(getattr(proxy_stream, "job_id", ""))
-            if isinstance(job, dict) and job.get("error"):
-                job_error = str(job.get("error") or "")
-        except Exception:
-            job_error = ""
-
-        body_text = "\n".join(collected_lines)
-        if job_error and not body_text:
-            body_text = job_error
-
-        status_code = getattr(proxy_stream, "status_code", 200)
-        if job_error:
-            status_code = HTTPStatus.SERVICE_UNAVAILABLE
-
-        return BrowserFetchStreamResponse(
-            status_code=status_code,
-            headers=getattr(proxy_stream, "headers", {}),
-            text=body_text,
-            method=http_method,
-            url=url,
-        )
-
-    task_id = str(uuid.uuid4())
-    future = asyncio.Future()
-    proxy_pending_tasks[task_id] = future
-
-    # Add to queue
-    proxy_task_queue.append({
-        "id": task_id,
-        "url": url,
-        "method": http_method,
-        "body": json.dumps(payload) if payload else ""
-    })
-    
-    _m().debug_print(f"📫 Added task {task_id} to Proxy Queue. Waiting for Userscript...")
-
+    if proxy_stream is None:
+        return None
+    job_id = str(getattr(proxy_stream, "job_id", "") or "")
+    pickup_timeout = _constants.DEFAULT_USERSCRIPT_PROXY_PICKUP_TIMEOUT_SECONDS
     try:
-        # Wait for the first chunk/response from the userscript
-        # In a full implementation, we'd handle a stream of chunks.
-        # For simplicity here, we await the *first* signal which might be the full text or start of stream.
-        # But wait, the userscript sends chunks via POST.
-        # We need a way to feed those chunks into a generator.
-        # For this MVP, let's assume the userscript sends the FULL response or we handle it via a shared buffer.
-        
-        # ACTUALLY: The `BrowserFetchStreamResponse` expects a full text or an iterator.
-        # If we want true streaming via proxy, we need a Queue, not a Future.
-        
-        # Let's upgrade `proxy_pending_tasks` to hold an asyncio.Queue for this task_id
-        # But `proxy_pending_tasks` type definition above was Future. 
-        # For this step, let's implement a simple non-streaming wait (or buffered stream) to keep it KISS as requested.
-        # If the userscript sends chunks, we can accumulate them? 
-        # No, "stream: True" needs real-time chunks.
-        
-        # Revised approach for `fetch_via_proxy_queue`:
-        # We will wait for the userscript to signal "start" or provide content.
-        # Since `BrowserFetchStreamResponse` is designed to wrap a completed text OR an async iterator,
-        # let's make it wrap an async iterator that pulls from a Queue.
-        
-        # We'll need to change `proxy_pending_tasks` value type to `asyncio.Queue` dynamically.
-        # But the endpoint `post_proxy_result` expects to set_result on a Future.
-        
-        # Let's stick to the Future for the *initial connection* / *first byte*.
-        result = await asyncio.wait_for(future, timeout=timeout_seconds)
-        
-        # If result contains "chunk", it's a stream part. 
-        # This simple implementation assumes the userscript might send the full text for now OR we accept that
-        # we only support non-streaming or buffered-streaming via this simple Future mechanism for the MVP.
-        #
-        # TO SUPPORT REAL STREAMING:
-        # We would need a dedicated WebSocket or a polling mechanism for the *response* too.
-        # Given "minimal code changes", let's assume the Userscript gathers the response and sends it back.
-        # This might delay the "first token" but ensures reliability.
-        
-        if isinstance(result, dict):
-            if "error" in result:
-                _m().debug_print(f"❌ Proxy Task Error: {result['error']}")
-                return None
-            
-            text = result.get("text", "")
-            # If the userscript sent "chunk", we might have missed subsequent chunks if we only waited for one Future.
-            # So for this MVP, the userscript should buffer and send the full text, 
-            # OR we need a more complex "Queue" based mechanism.
-            
-            # Let's return a response with the text we got.
-            return BrowserFetchStreamResponse(
-                status_code=result.get("status", 200),
-                headers=result.get("headers", {}),
-                text=text,
-                method=http_method,
-                url=url
+        pickup_timeout = int(
+            (_m().get_config() or {}).get(
+                "userscript_proxy_pickup_timeout_seconds",
+                _constants.DEFAULT_USERSCRIPT_PROXY_PICKUP_TIMEOUT_SECONDS,
             )
-            
-    except asyncio.TimeoutError:
-        _m().debug_print(f"❌ Proxy Task {task_id} timed out. Is the Userscript running?")
-        if task_id in proxy_pending_tasks:
-            del proxy_pending_tasks[task_id]
-        if task_id in [t['id'] for t in proxy_task_queue]:
-            # Remove from queue if not picked up
-            proxy_task_queue[:] = [t for t in proxy_task_queue if t['id'] != task_id]
-        return None
-    except Exception as e:
-        _m().debug_print(f"❌ Proxy Task Exception: {e}")
-        return None
+        )
+    except Exception:
+        pickup_timeout = _constants.DEFAULT_USERSCRIPT_PROXY_PICKUP_TIMEOUT_SECONDS
+    pickup_timeout = max(3, min(pickup_timeout, 60))
+    if job_id:
+        picked = await _wait_for_userscript_pickup(job_id, pickup_timeout)
+        if not picked:
+            return None
 
-    return None
+    if streaming:
+        return proxy_stream
+
+    # Non-streaming call: buffer everything and return a plain response wrapper.
+    collected_lines: list[str] = []
+    async with proxy_stream as response:
+        async for line in response.aiter_lines():
+            collected_lines.append(str(line))
+
+    job_error = ""
+    try:
+        job = _m()._USERSCRIPT_PROXY_JOBS.get(getattr(proxy_stream, "job_id", ""))
+        if isinstance(job, dict) and job.get("error"):
+            job_error = str(job.get("error") or "")
+    except Exception:
+        job_error = ""
+
+    body_text = "\n".join(collected_lines)
+    if job_error and not body_text:
+        body_text = job_error
+
+    status_code = getattr(proxy_stream, "status_code", 200)
+    if job_error:
+        status_code = HTTPStatus.SERVICE_UNAVAILABLE
+
+    return BrowserFetchStreamResponse(
+        status_code=status_code,
+        headers=getattr(proxy_stream, "headers", {}),
+        text=body_text,
+        method=http_method,
+        url=url,
+        job_id=job_id,
+    )

@@ -293,6 +293,8 @@ extensionApi.runtime.onMessage.addListener((message) => {
     headers: message.headers,
     lines: message.lines,
     error: message.error,
+    body_preview: message.body_preview,
+    body_preview_content_type: message.body_preview_content_type,
     done: message.done,
     upstream_fetch_started: message.upstream_fetch_started,
   };

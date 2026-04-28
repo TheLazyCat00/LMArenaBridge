@@ -155,20 +155,6 @@ STATUS_MESSAGES = {
 }
 
 # ============================================================
-# RECAPTCHA CONSTANTS
-# ============================================================
-
-# Default reCAPTCHA sitekey and action from gpt4free/g4f/Provider/needs_auth/LMArena.py
-RECAPTCHA_SITEKEY = "6Led_uYrAAAAAIP_9E8Ais_67Z6Vp4vdf40p8SQU"
-RECAPTCHA_ACTION = "chat_submit"
-
-# reCAPTCHA Enterprise v2 sitekey used when v3 scoring fails and LMArena prompts a checkbox challenge
-RECAPTCHA_V2_SITEKEY = "6Ld7ePYrAAAAAB34ovoFoDau1fqCJ6IyOjFEQaMn"
-
-# Cloudflare Turnstile sitekey used by LMArena to mint anonymous-user signup tokens
-TURNSTILE_SITEKEY = "0x4AAAAAAA65vWDmG-O_lPtT"
-
-# ============================================================
 # ARENA ORIGINS
 # ============================================================
 
@@ -183,33 +169,14 @@ ARENA_HOST_TO_ORIGIN = {
 }
 
 # ============================================================
-# BROWSER FETCH MODELS
-# ============================================================
-
-# Models that should always use an in-browser fetch transport for streaming
-STRICT_BROWSER_FETCH_MODELS = {
-    "gemini-3-pro-grounding",
-    "gemini-exp-1206",
-}
-
-# ============================================================
 # TIMEOUTS AND LIMITS
 # ============================================================
 
 # Default timeout for requests (seconds)
 DEFAULT_REQUEST_TIMEOUT = 120
 
-# reCAPTCHA timeout settings (milliseconds)
-GRECAPTCHA_TIMEOUT_MS = 60000
-GRECAPTCHA_POLL_MS = 250
-
-# Turnstile retry settings
-TURNSTILE_MAX_ATTEMPTS = 15
-
 # Token expiry margins (seconds)
 TOKEN_EXPIRY_SKEW_SECONDS = 60
-RECAPTCHA_TOKEN_EXPIRY_SECONDS = 115
-RECAPTCHA_V3_TOKEN_LIFETIME_SECONDS = 115
 
 # Background refresh interval (seconds)
 PERIODIC_REFRESH_INTERVAL_SECONDS = 1800  # 30 minutes
@@ -224,6 +191,8 @@ DEFAULT_RATE_LIMIT_RPM = 60
 
 DEFAULT_USERSCRIPT_PROXY_POLL_TIMEOUT_SECONDS = 25
 DEFAULT_USERSCRIPT_PROXY_JOB_TTL_SECONDS = 90
+# Pickup timeout should allow for sequential extension processing when jobs queue.
+DEFAULT_USERSCRIPT_PROXY_PICKUP_TIMEOUT_SECONDS = 15
 USERSCRIPT_PROXY_ACTIVE_WINDOW_BUFFER_SECONDS = 10
 USERSCRIPT_PROXY_JOB_TTL_MAX_SECONDS = 600
 
@@ -252,34 +221,6 @@ def get_general_backoff_seconds(attempt: int) -> int:
     return min(2 * (2 ** attempt), 30)
 
 # ============================================================
-# BROWSER SETTINGS
-# ============================================================
-
-# Default browser window modes
-DEFAULT_CAMOUFOX_PROXY_WINDOW_MODE = "hide"
-DEFAULT_CAMOUFOX_FETCH_WINDOW_MODE = "hide"
-DEFAULT_CHROME_FETCH_WINDOW_MODE = "hide"
-
-# Window mode valid values
-VALID_WINDOW_MODES = {"hide", "hidden", "minimize", "minimized", "offscreen", "off-screen", "moveoffscreen", "move-offscreen", "visible"}
-
-# Chrome/Edge executable paths (Windows)
-CHROME_PATH_CANDIDATES = [
-    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-]
-EDGE_PATH_CANDIDATES = [
-    r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-]
-
-# Browser user agent
-DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/120.0.0.0 Safari/537.36"
-)
-
-# ============================================================
 # IMAGE UPLOAD SETTINGS
 # ============================================================
 
@@ -295,67 +236,8 @@ SUPPORTED_IMAGE_MIME_TYPES = {
 }
 
 # ============================================================
-# CLOUDFLARE COOKIE NAMES
-# ============================================================
-
-CF_CLEARANCE_COOKIE = "cf_clearance"
-CF_BM_COOKIE = "__cf_bm"
-CF_UVID_COOKIE = "_cfuvid"
-PROVISIONAL_USER_ID_COOKIE = "provisional_user_id"
-ARENA_AUTH_COOKIE = "arena-auth-prod-v1"
-GRECAPTCHA_COOKIE = "_GRECAPTCHA"
-
-# Cookie domains
-ARENA_COOKIE_DOMAINS = (".lmarena.ai", ".arena.ai")
-
-# ============================================================
-# API ENDPOINTS
-# ============================================================
-
-ARENA_DIRECT_MODE_URL = "https://arena.ai/?mode=direct"
-NEXTJS_API_SIGNUP = "/nextjs-api/sign-up"
-
-# ============================================================
 # CONTENT TYPES
 # ============================================================
 
 CONTENT_TYPE_TEXT_PLAIN_UTF8 = "text/plain;charset=UTF-8"
 CONTENT_TYPE_APPLICATION_JSON = "application/json"
-
-# ============================================================
-# TURNSTILE SELECTORS
-# ============================================================
-
-TURNSTILE_SELECTORS = [
-    '#lm-bridge-turnstile',
-    '#lm-bridge-turnstile iframe',
-    '#cf-turnstile', 
-    'iframe[src*="challenges.cloudflare.com"]',
-    '[style*="display: grid"] iframe'
-]
-
-TURNSTILE_INNER_SELECTORS = [
-    "input[type='checkbox']",
-    "div[role='checkbox']",
-    "label",
-]
-
-# ============================================================
-# HTTP HEADERS
-# ============================================================
-
-ARENA_ORIGIN_HEADER = "https://arena.ai"
-ARENA_REFERER_HEADER = "https://arena.ai/?mode=direct"
-
-# ============================================================
-# SUPABASE
-# ============================================================
-
-# Regex pattern for finding Supabase JWT
-SUPABASE_JWT_PATTERN = r"eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+"
-
-# ============================================================
-# TURNSTILE / CLOUDFLARE
-# ============================================================
-
-CLOUDFLARE_CHALLENGE_TITLE = "Just a moment"
