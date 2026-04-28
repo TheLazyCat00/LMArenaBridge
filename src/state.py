@@ -4,7 +4,7 @@ Holds in-memory state that needs to be shared across modules.
 """
 
 from collections import defaultdict
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import time
 
 
@@ -20,18 +20,9 @@ current_token_index: int = 0
 # Config file tracking
 _last_config_file: Optional[str] = None
 
-# Conversation tracking
+# Conversation tracking (legacy/no-op in proxy-only mode)
 conversation_tokens: Dict[str, str] = {}
 request_failed_tokens: Dict[str, set] = {}
-
-# Ephemeral tokens
-EPHEMERAL_ARENA_AUTH_TOKEN: Optional[str] = None
-SUPABASE_ANON_KEY: Optional[str] = None
-
-# reCAPTCHA
-RECAPTCHA_TOKEN: Optional[str] = None
-# Initialize expiry far in the past to force a refresh on startup
-RECAPTCHA_EXPIRY: Any = None  # Will be set on init
 
 # Image cache: { md5_hash: { key: str, url: str, expiry: float } }
 IMAGES_CACHE: Dict[str, dict] = {}

@@ -24,24 +24,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.security import APIKeyHeader
 
-import httpx
-import requests
-
 # Import from modularized modules
 from . import constants
 from . import config as _config_module
-from . import state as _state_module
 from .config import get_models, save_models
-from .auth import (
-    _decode_arena_auth_session_token,
-    _decode_jwt_payload,
-    get_arena_auth_token_expiry_epoch,
-    is_arena_auth_token_expired,
-    is_probably_valid_arena_auth_token,
-    get_next_auth_token,
-    remove_auth_token,
-    ARENA_AUTH_REFRESH_LOCK,
-)
 
 from .transport import (
     _touch_userscript_poll,
@@ -61,38 +47,8 @@ DEBUG = constants.DEBUG
 PORT = constants.PORT
 HTTPStatus = constants.HTTPStatus
 STATUS_MESSAGES = constants.STATUS_MESSAGES
-LMARENA_ORIGIN = constants.LMARENA_ORIGIN
-ARENA_ORIGIN = constants.ARENA_ORIGIN
-ARENA_HOST_TO_ORIGIN = constants.ARENA_HOST_TO_ORIGIN
-DEFAULT_REQUEST_TIMEOUT = constants.DEFAULT_REQUEST_TIMEOUT
-TOKEN_EXPIRY_SKEW_SECONDS = constants.TOKEN_EXPIRY_SKEW_SECONDS
-PERIODIC_REFRESH_INTERVAL_SECONDS = constants.PERIODIC_REFRESH_INTERVAL_SECONDS
-DEFAULT_RATE_LIMIT_RPM = constants.DEFAULT_RATE_LIMIT_RPM
-RATE_LIMIT_WINDOW_SECONDS = constants.RATE_LIMIT_WINDOW_SECONDS
-DEFAULT_USERSCRIPT_PROXY_POLL_TIMEOUT_SECONDS = constants.DEFAULT_USERSCRIPT_PROXY_POLL_TIMEOUT_SECONDS
-DEFAULT_USERSCRIPT_PROXY_JOB_TTL_SECONDS = constants.DEFAULT_USERSCRIPT_PROXY_JOB_TTL_SECONDS
-USERSCRIPT_PROXY_ACTIVE_WINDOW_BUFFER_SECONDS = constants.USERSCRIPT_PROXY_ACTIVE_WINDOW_BUFFER_SECONDS
-USERSCRIPT_PROXY_JOB_TTL_MAX_SECONDS = constants.USERSCRIPT_PROXY_JOB_TTL_MAX_SECONDS
-DEFAULT_USER_AGENT = constants.DEFAULT_USER_AGENT
 MAX_IMAGE_SIZE_BYTES = constants.MAX_IMAGE_SIZE_BYTES
 SUPPORTED_IMAGE_MIME_TYPES = constants.SUPPORTED_IMAGE_MIME_TYPES
-CF_CLEARANCE_COOKIE = constants.CF_CLEARANCE_COOKIE
-CF_BM_COOKIE = constants.CF_BM_COOKIE
-CF_UVID_COOKIE = constants.CF_UVID_COOKIE
-PROVISIONAL_USER_ID_COOKIE = constants.PROVISIONAL_USER_ID_COOKIE
-ARENA_AUTH_COOKIE = constants.ARENA_AUTH_COOKIE
-GRECAPTCHA_COOKIE = constants.GRECAPTCHA_COOKIE
-ARENA_COOKIE_DOMAINS = constants.ARENA_COOKIE_DOMAINS
-ARENA_DIRECT_MODE_URL = constants.ARENA_DIRECT_MODE_URL
-NEXTJS_API_SIGNUP = constants.NEXTJS_API_SIGNUP
-CONTENT_TYPE_TEXT_PLAIN_UTF8 = constants.CONTENT_TYPE_TEXT_PLAIN_UTF8
-CONTENT_TYPE_APPLICATION_JSON = constants.CONTENT_TYPE_APPLICATION_JSON
-TURNSTILE_SELECTORS = constants.TURNSTILE_SELECTORS
-TURNSTILE_INNER_SELECTORS = constants.TURNSTILE_INNER_SELECTORS
-ARENA_ORIGIN_HEADER = constants.ARENA_ORIGIN_HEADER
-ARENA_REFERER_HEADER = constants.ARENA_REFERER_HEADER
-SUPABASE_JWT_PATTERN = constants.SUPABASE_JWT_PATTERN
-CLOUDFLARE_CHALLENGE_TITLE = constants.CLOUDFLARE_CHALLENGE_TITLE
 
 USERSCRIPT_PROXY_REQUIRED_MESSAGE = (
     "Userscript proxy is required. Start Firefox, load the extension, "
@@ -174,21 +130,45 @@ def log_http_status(status_code: int, context: str = "") -> None:
         debug_print(f"{emoji} HTTP {status_code}: {message}")
 
 
+def _extract_header(headers: Optional[dict], header_name: str) -> str:
+    if not isinstance(headers, dict):
+        return ""
+    needle = header_name.lower()
+    for key, value in headers.items():
+        if str(key).lower() == needle:
+            return str(value or "").strip()
+    return ""
 
-# Updated constants from gpt4free/g4f/Provider/needs_auth/LMArena.py
-RECAPTCHA_SITEKEY = "6Led_uYrAAAAAKjxDIF58fgFtX3t8loNAK85bW9I"
-RECAPTCHA_ACTION = "chat_submit"
-# reCAPTCHA Enterprise v2 sitekey used when v3 scoring fails and LMArena prompts a checkbox challenge.
-RECAPTCHA_V2_SITEKEY = "6Ld7ePYrAAAAAB34ovoFoDau1fqCJ6IyOjFEQaMn"
-# Cloudflare Turnstile sitekey used by LMArena to mint anonymous-user signup tokens.
-# (Used for POST /nextjs-api/sign-up before `arena-auth-prod-v1` exists.)
-TURNSTILE_SITEKEY = "0x4AAAAAAA65vWDmG-O_lPtT"
+
+def _format_upstream_diagnostic(
+    status_code: int,
+    *,
+    headers: Optional[dict] = None,
+    body_text: Optional[str] = None,
+    job: Optional[dict] = None,
+    preview_limit: int = 300,
+) -> str:
+    content_type = _extract_header(headers, "content-type")
+    if not content_type and isinstance(job, dict):
+        content_type = str(job.get("body_preview_content_type") or "").strip()
+    preview = ""
+    if isinstance(job, dict):
+        preview = str(job.get("body_preview") or "")
+    if not preview:
+        preview = str(body_text or "")
+    preview = preview.strip().replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ")
+    if preview_limit > 0 and len(preview) > preview_limit:
+        preview = preview[:preview_limit].rstrip() + "..."
+    parts = [f"Upstream HTTP {status_code}."]
+    if content_type:
+        parts.append(f"content-type={content_type}.")
+    if preview:
+        parts.append(f"body-preview={preview}")
+    return " ".join(parts).strip()
+
+
+
 STREAM_CREATE_EVALUATION_PATH = "/nextjs-api/stream/create-evaluation"
-
-# LMArena occasionally changes the reCAPTCHA sitekey/action. We try to discover them from captured JS chunks on startup
-# and persist them into config.json; these helpers read and apply those values with safe fallbacks.
-
-# _is_windows, _normalize_camoufox_window_mode imported from browser_utils
 
 
 USERSCRIPT_PROXY_LAST_POLL_AT: float = 0.0
@@ -363,16 +343,6 @@ model_usage_stats = defaultdict(int)
 current_token_index = 0
 # Track config file path changes to reset per-config state in tests/dev.
 _LAST_CONFIG_FILE: Optional[str] = None
-# Track which token is assigned to each conversation (conversation_id -> token)
-conversation_tokens: Dict[str, str] = {}
-# Track failed tokens per request to avoid retrying with same token
-request_failed_tokens: Dict[str, set] = {}
-
-# Ephemeral Arena auth cookie captured from browser sessions (not persisted unless enabled).
-EPHEMERAL_ARENA_AUTH_TOKEN: Optional[str] = None
-
-# Supabase anon key (public client key) discovered from LMArena's JS bundles. Kept in-memory by default.
-SUPABASE_ANON_KEY: Optional[str] = None
 
 # --- Helper Functions ---
 
@@ -412,23 +382,8 @@ def load_usage_stats():
         debug_print(f"⚠️  Error loading usage stats: {e}, using empty stats")
         model_usage_stats = defaultdict(int)
 
-def save_config(config, *, preserve_auth_tokens: bool = True):
+def save_config(config) -> None:
     try:
-        # Avoid clobbering user-provided auth tokens when multiple tasks write config.json concurrently.
-        # Background refreshes/cookie upserts shouldn't overwrite auth tokens that may have been added via the dashboard.
-        if preserve_auth_tokens:
-            try:
-                with open(CONFIG_FILE, "r") as f:
-                    on_disk = json.load(f)
-            except Exception:
-                on_disk = None
-
-            if isinstance(on_disk, dict):
-                if "auth_tokens" in on_disk and isinstance(on_disk.get("auth_tokens"), list):
-                    config["auth_tokens"] = list(on_disk.get("auth_tokens") or [])
-                if "auth_token" in on_disk:
-                    config["auth_token"] = str(on_disk.get("auth_token") or "")
-
         # Persist in-memory stats to the config dict before saving
         config["usage_stats"] = dict(model_usage_stats)
         tmp_path = f"{CONFIG_FILE}.tmp"
@@ -437,28 +392,6 @@ def save_config(config, *, preserve_auth_tokens: bool = True):
         os.replace(tmp_path, CONFIG_FILE)
     except Exception as e:
         debug_print(f"❌ Error saving config: {e}")
-
-def get_request_headers():
-    """Get request headers with the first available auth token (for compatibility)"""
-    config = get_config()
-    
-    # Try to get token from auth_tokens first, then fallback to single token
-    auth_tokens = config.get("auth_tokens", [])
-    if auth_tokens:
-        token = auth_tokens[0]  # Just use first token for non-API requests
-    else:
-        token = config.get("auth_token", "").strip()
-        if not token:
-            cookie_store = config.get("browser_cookies")
-            if isinstance(cookie_store, dict) and bool(config.get("persist_arena_auth_cookie")):
-                token = str(cookie_store.get("arena-auth-prod-v1") or "").strip()
-                if token:
-                    config["auth_tokens"] = [token]
-                    save_config(config, preserve_auth_tokens=False)
-        if not token:
-            raise HTTPException(status_code=500, detail="Arena auth token not set in dashboard.")
-    
-    return get_request_headers_with_token(token)
 
 # --- Dashboard Authentication ---
 
@@ -802,7 +735,25 @@ async def dashboard(session: str = Depends(get_current_session)):
         """
     
     if not models_html:
-        models_html = '<div class="no-data">No models found. Token may be invalid or expired.</div>'
+        models_html = '<div class="no-data">No models cached. Refresh models via the userscript proxy.</div>'
+
+    proxy_active = _userscript_proxy_is_active(config)
+    proxy_status_label = "Active" if proxy_active else "Inactive"
+    proxy_status_class = "status-good" if proxy_active else "status-bad"
+    last_poll = max(float(USERSCRIPT_PROXY_LAST_POLL_AT or 0.0), float(last_userscript_poll or 0.0))
+    if last_poll <= 0:
+        proxy_age_display = "Never"
+    else:
+        proxy_age_seconds = max(0, int(time.time() - last_poll))
+        proxy_age_display = f"{proxy_age_seconds}s ago"
+    try:
+        proxy_queue_size = int(_get_userscript_proxy_queue().qsize())
+    except Exception:
+        proxy_queue_size = 0
+    proxy_pending_jobs = 0
+    for job in _USERSCRIPT_PROXY_JOBS.values():
+        if isinstance(job, dict) and not job.get("done"):
+            proxy_pending_jobs += 1
 
     # Render Stats
     stats_html = ""
@@ -812,14 +763,6 @@ async def dashboard(session: str = Depends(get_current_session)):
     else:
         stats_html = "<tr><td colspan='2' class='no-data'>No usage data yet</td></tr>"
 
-    # Check token status - check both legacy auth_token and new auth_tokens list
-    has_auth_token = bool(str(config.get("auth_token") or "").strip()) or any(config.get("auth_tokens") or [])
-    token_status = "✅ Configured" if has_auth_token else "❌ Not Set"
-    token_class = "status-good" if has_auth_token else "status-bad"
-    
-    cf_status = "✅ Configured" if config.get("cf_clearance") else "❌ Not Set"
-    cf_class = "status-good" if config.get("cf_clearance") else "status-bad"
-    
     # Get recent activity count (last 24 hours)
     recent_activity = sum(1 for timestamps in api_key_usage.values() for t in timestamps if time.time() - t < 86400)
 
@@ -1129,52 +1072,44 @@ async def dashboard(session: str = Depends(get_current_session)):
                     </div>
                 </div>
 
-                <!-- Arena Auth Token -->
+                <!-- Userscript Proxy -->
                 <div class="section">
                     <div class="section-header">
-                        <h2>🔐 Arena Authentication Tokens</h2>
-                        <span class="status-badge {token_class}">{token_status}</span>
+                        <h2>🦊 Userscript Proxy</h2>
+                        <span class="status-badge {proxy_status_class}">{proxy_status_label}</span>
                     </div>
-                    
-                    <h3 style="margin-bottom: 15px; font-size: 16px;">Multiple Auth Tokens (Round-Robin)</h3>
-                    <p style="color: #666; margin-bottom: 15px;">Add multiple tokens for automatic cycling. Each conversation will use a consistent token.</p>
-                    
-                    {''.join([f'''
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
-                        <code style="flex: 1; font-family: 'Courier New', monospace; font-size: 12px; word-break: break-all;">{token[:50]}...</code>
-                        <form action="/delete-auth-token" method="post" style="margin: 0;" onsubmit="return confirm('Delete this token?');">
-                            <input type="hidden" name="token_index" value="{i}">
-                            <button type="submit" class="btn-delete">Delete</button>
-                        </form>
-                    </div>
-                    ''' for i, token in enumerate(config.get("auth_tokens", []))])}
-                    
-                    {('<div class="no-data">No tokens configured. Add tokens below.</div>' if not config.get("auth_tokens") else '')}
-                    
-                    <h3 style="margin-top: 25px; margin-bottom: 15px; font-size: 16px;">Add New Token</h3>
-                    <form action="/add-auth-token" method="post">
-                        <div class="form-group">
-                            <label for="new_auth_token">New Arena Auth Token</label>
-                            <textarea id="new_auth_token" name="new_auth_token" placeholder="Paste a new arena-auth-prod-v1 token here" required></textarea>
+                    <p style="color: #666; margin-bottom: 15px;">
+                        All upstream Arena requests are executed by Firefox with the included extension.
+                        Ensure the extension is running and an arena.ai/lmarena.ai tab is open.
+                    </p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 15px;">
+                        <div style="background: #f8f9fa; padding: 12px; border-radius: 6px;">
+                            <strong>Last Poll</strong><br>
+                            <span style="color: #666;">{proxy_age_display}</span>
                         </div>
-                        <button type="submit">Add Token</button>
-                    </form>
+                        <div style="background: #f8f9fa; padding: 12px; border-radius: 6px;">
+                            <strong>Queue Size</strong><br>
+                            <span style="color: #666;">{proxy_queue_size}</span>
+                        </div>
+                        <div style="background: #f8f9fa; padding: 12px; border-radius: 6px;">
+                            <strong>Pending Jobs</strong><br>
+                            <span style="color: #666;">{proxy_pending_jobs}</span>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Cloudflare Clearance -->
+                <!-- Models Cache -->
                 <div class="section">
                     <div class="section-header">
-                        <h2>☁️ Cloudflare Clearance</h2>
-                        <span class="status-badge {cf_class}">{cf_status}</span>
+                        <h2>📦 Models Cache</h2>
                     </div>
-                    <p style="color: #666; margin-bottom: 15px;">This is automatically fetched on startup. If API requests fail with 404 errors, the token may have expired.</p>
-                    <code style="background: #f8f9fa; padding: 10px; display: block; border-radius: 6px; word-break: break-all; margin-bottom: 15px;">
-                        {config.get("cf_clearance", "Not set")}
-                    </code>
-                    <form action="/refresh-tokens" method="post" style="margin-top: 15px;">
-                        <button type="submit" style="background: #28a745;">🔄 Refresh Tokens &amp; Models</button>
+                    <p style="color: #666; margin-bottom: 15px;">
+                        Models are loaded from the local cache file. Refresh requires the userscript proxy to be active.
+                    </p>
+                    <p style="margin-bottom: 10px;"><strong>Cached models:</strong> {len(models)}</p>
+                    <form action="/refresh-models" method="post" style="margin-top: 15px;">
+                        <button type="submit" style="background: #28a745;">🔄 Refresh Models via Proxy</button>
                     </form>
-                    <p style="color: #999; font-size: 13px; margin-top: 10px;"><em>Note: This will fetch a fresh cf_clearance token and update the model list.</em></p>
                 </div>
 
                 <!-- API Keys -->
@@ -1369,15 +1304,6 @@ async def dashboard(session: str = Depends(get_current_session)):
         </html>
     """
 
-@app.post("/update-auth-token")
-async def update_auth_token(session: str = Depends(get_current_session), auth_token: str = Form(...)):
-    if not session:
-        return RedirectResponse(url="/login")
-    config = get_config()
-    config["auth_token"] = auth_token.strip()
-    save_config(config, preserve_auth_tokens=False)
-    return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
-
 @app.post("/create-key")
 async def create_key(session: str = Depends(get_current_session), name: str = Form(...), rpm: int = Form(...)):
     if not session:
@@ -1408,88 +1334,20 @@ async def delete_key(session: str = Depends(get_current_session), key_id: str = 
         debug_print(f"❌ Error deleting key: {e}")
     return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
 
-@app.post("/add-auth-token")
-async def add_auth_token(session: str = Depends(get_current_session), new_auth_token: str = Form(...)):
+@app.post("/refresh-models")
+async def refresh_models(session: str = Depends(get_current_session)):
     if not session:
         return RedirectResponse(url="/login")
     try:
-        config = get_config()
-        token = new_auth_token.strip()
-        if token and token not in config.get("auth_tokens", []):
-            if "auth_tokens" not in config:
-                config["auth_tokens"] = []
-            config["auth_tokens"].append(token)
-            save_config(config, preserve_auth_tokens=False)
+        await refresh_models_via_proxy(require_active=True)
     except Exception as e:
-        debug_print(f"❌ Error adding auth token: {e}")
-    return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
-
-@app.post("/delete-auth-token")
-async def delete_auth_token(session: str = Depends(get_current_session), token_index: int = Form(...)):
-    if not session:
-        return RedirectResponse(url="/login")
-    try:
-        config = get_config()
-        auth_tokens = config.get("auth_tokens", [])
-        if 0 <= token_index < len(auth_tokens):
-            auth_tokens.pop(token_index)
-            config["auth_tokens"] = auth_tokens
-            save_config(config, preserve_auth_tokens=False)
-    except Exception as e:
-        debug_print(f"❌ Error deleting auth token: {e}")
-    return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
-
-@app.post("/refresh-tokens")
-async def refresh_tokens(session: str = Depends(get_current_session)):
-    if not session:
-        return RedirectResponse(url="/login")
-    try:
-        await get_initial_data()
-    except Exception as e:
-        debug_print(f"❌ Error refreshing tokens: {e}")
+        debug_print(f"❌ Error refreshing models: {e}")
     return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
 
 # --- Userscript Proxy Support ---
 
-# In-memory queue for Userscript Proxy
-# { task_id: asyncio.Future }
-proxy_pending_tasks: Dict[str, asyncio.Future] = {}
-# List of tasks waiting to be picked up by the userscript
-# [ { id, url, method, body } ]
-proxy_task_queue: List[dict] = []
-# Timestamp of last userscript poll
+# Timestamp of last userscript poll (legacy compatibility for tests/metrics).
 last_userscript_poll: float = 0
-
-@app.get("/proxy/tasks")
-async def get_proxy_tasks(api_key: dict = Depends(rate_limit_api_key)):
-    """
-    Endpoint for the Userscript to poll for new tasks.
-    Requires a valid API key to prevent unauthorized task stealing.
-    """
-    global last_userscript_poll
-    last_userscript_poll = time.time()
-    
-    # In a real multi-user scenario, we might want to filter tasks by user/session.
-    # For this bridge, we assume a single trust domain.
-    current_tasks = list(proxy_task_queue)
-    proxy_task_queue.clear()
-    return current_tasks
-
-@app.post("/proxy/result/{task_id}")
-async def post_proxy_result(task_id: str, request: Request, api_key: dict = Depends(rate_limit_api_key)):
-    """
-    Endpoint for the Userscript to post results (chunks or full response).
-    """
-    try:
-        data = await request.json()
-        if task_id in proxy_pending_tasks:
-            future = proxy_pending_tasks[task_id]
-            if not future.done():
-                future.set_result(data)
-        return {"status": "ok"}
-    except Exception as e:
-        debug_print(f"❌ Error processing proxy result for {task_id}: {e}")
-        return {"status": "error", "message": str(e)}
 
 @app.post("/api/v1/userscript/poll")
 async def userscript_poll(request: Request):
@@ -1588,6 +1446,17 @@ async def userscript_push(request: Request):
     if isinstance(headers, dict):
         job["headers"] = headers
 
+    body_preview = data.get("body_preview")
+    if body_preview is None:
+        body_preview = data.get("bodyPreview")
+    if body_preview:
+        job["body_preview"] = str(body_preview)
+    body_preview_content_type = data.get("body_preview_content_type")
+    if body_preview_content_type is None:
+        body_preview_content_type = data.get("content_type")
+    if body_preview_content_type:
+        job["body_preview_content_type"] = str(body_preview_content_type)
+
     error = data.get("error")
     if error:
         job["error"] = str(error)
@@ -1636,13 +1505,24 @@ async def userscript_status(request: Request):
     active_window_seconds = max(10, min(poll_timeout_seconds + 10, 90))
     last_poll = max(_safe_float(USERSCRIPT_PROXY_LAST_POLL_AT), _safe_float(last_userscript_poll))
     age_seconds = now - last_poll
+    queue_size = 0
+    try:
+        queue_size = int(_get_userscript_proxy_queue().qsize())
+    except Exception:
+        queue_size = 0
+    pending_jobs = 0
+    for job in _USERSCRIPT_PROXY_JOBS.values():
+        if isinstance(job, dict) and not job.get("done"):
+            pending_jobs += 1
     return {
+        "is_active": _userscript_proxy_is_active(cfg),
+        "seconds_since_last_poll": age_seconds,
+        "queue_size": queue_size,
+        "pending_jobs": pending_jobs,
         "now_unix": now,
         "last_poll_unix": last_poll,
-        "last_poll_age_seconds": age_seconds,
         "poll_timeout_seconds": poll_timeout_seconds,
         "active_window_seconds": active_window_seconds,
-        "active": _userscript_proxy_is_active(cfg),
     }
 
 
@@ -1656,21 +1536,21 @@ async def health_check():
         config = get_config()
         
         # Basic health checks
-        has_cf_clearance = bool(config.get("cf_clearance"))
+        proxy_active = _userscript_proxy_is_active(config)
         has_models = len(models) > 0
         has_api_keys = len(config.get("api_keys", [])) > 0
-        
-        status = "healthy" if (has_cf_clearance and has_models) else "degraded"
-        
+
+        status = "healthy" if (proxy_active and has_models) else "degraded"
+
         return {
             "status": status,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "checks": {
-                "cf_clearance": has_cf_clearance,
+                "proxy_active": proxy_active,
                 "models_loaded": has_models,
                 "model_count": len(models),
-                "api_keys_configured": has_api_keys
-            }
+                "api_keys_configured": has_api_keys,
+            },
         }
     except Exception as e:
         return {
@@ -1683,6 +1563,8 @@ async def health_check():
 async def list_models(api_key: dict = Depends(rate_limit_api_key)):
     try:
         models = get_models()
+        if not models:
+            debug_print("⚠️ Models cache is empty. Returning empty model list.")
         
         # Filter for models with text OR search OR image output capability and an organization (exclude stealth models)
         # Always include image models - no special key needed
@@ -2030,11 +1912,15 @@ async def api_chat_completions(request: Request, api_key: dict = Depends(rate_li
                 )
 
                 if stream_context is None:
+                    error_message = (
+                        "Userscript proxy did not pick up the job in time. "
+                        "Ensure Firefox is running with the extension active and an Arena tab open."
+                    )
                     error_chunk = {
                         "error": {
-                            "message": "Userscript proxy request failed or timed out.",
+                            "message": error_message,
                             "type": "proxy_unavailable",
-                            "code": HTTPStatus.SERVICE_UNAVAILABLE,
+                            "code": HTTPStatus.GATEWAY_TIMEOUT,
                         }
                     }
                     yield f"data: {json.dumps(error_chunk)}\n\n"
@@ -2052,14 +1938,24 @@ async def api_chat_completions(request: Request, api_key: dict = Depends(rate_li
                             body_text = (await response.aread()).decode("utf-8", errors="replace")
                         except Exception:
                             body_text = ""
+                        job = None
                         job_error = ""
                         if proxy_job_id:
                             job = _USERSCRIPT_PROXY_JOBS.get(proxy_job_id)
                             if isinstance(job, dict) and job.get("error"):
                                 job_error = str(job.get("error") or "")
-                        message = job_error or body_text or f"Upstream error ({response.status_code})."
-                        if "challenge requires user action" in message.lower():
+                        diagnostic = _format_upstream_diagnostic(
+                            response.status_code,
+                            headers=response.headers,
+                            body_text=body_text,
+                            job=job if isinstance(job, dict) else None,
+                        )
+                        if job_error and "challenge requires user action" in job_error.lower():
                             message = "Challenge requires user action in the Arena tab."
+                        elif job_error:
+                            message = f"{job_error} {diagnostic}".strip()
+                        else:
+                            message = diagnostic
                         error_chunk = {
                             "error": {
                                 "message": message,
@@ -2252,7 +2148,13 @@ async def api_chat_completions(request: Request, api_key: dict = Depends(rate_li
             headers=proxy_headers,
         )
         if response is None:
-            raise HTTPException(status_code=503, detail="Userscript proxy request failed or timed out.")
+            raise HTTPException(
+                status_code=504,
+                detail=(
+                    "Userscript proxy did not pick up the job in time. "
+                    "Ensure Firefox is running with the extension active and an Arena tab open."
+                ),
+            )
 
         log_http_status(response.status_code, "LMArena API Response")
 
@@ -2260,9 +2162,24 @@ async def api_chat_completions(request: Request, api_key: dict = Depends(rate_li
         response_text_body = response_bytes.decode("utf-8", errors="replace")
 
         if response.status_code >= 400:
+            job = None
+            job_error = ""
+            job_id = str(getattr(response, "job_id", "") or "")
+            if job_id:
+                job = _USERSCRIPT_PROXY_JOBS.get(job_id)
+                if isinstance(job, dict) and job.get("error"):
+                    job_error = str(job.get("error") or "")
+            diagnostic = _format_upstream_diagnostic(
+                response.status_code,
+                headers=getattr(response, "headers", {}),
+                body_text=response_text_body,
+                job=job if isinstance(job, dict) else None,
+            )
+            if job_error and "challenge requires user action" in job_error.lower():
+                raise HTTPException(status_code=503, detail="Challenge requires user action in the Arena tab.")
             if "challenge requires user action" in response_text_body.lower():
                 raise HTTPException(status_code=503, detail="Challenge requires user action in the Arena tab.")
-            raise HTTPException(status_code=502, detail="Upstream error from LMArena via userscript proxy.")
+            raise HTTPException(status_code=502, detail=diagnostic)
 
         response_text = ""
         reasoning_text = ""

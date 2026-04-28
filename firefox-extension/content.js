@@ -39,6 +39,7 @@ function injectPageBridge() {
       const MAX_LINES = 50;
       const MAX_BYTES = 32768;
       const CHALLENGE_CHECK_BYTES = 1024;
+      const BODY_PREVIEW_BYTES = 512;
       let runningJobId = null;
 
       function sendUpdate(jobId, update) {
@@ -48,9 +49,12 @@ function injectPageBridge() {
         );
       }
 
-      function challengeError(jobId) {
+      function challengeError(jobId, contentType, preview) {
+        const snippet = String(preview || "").slice(0, BODY_PREVIEW_BYTES);
         sendUpdate(jobId, {
           error: "Challenge requires user action in the Arena tab",
+          body_preview: snippet,
+          body_preview_content_type: contentType || "",
           done: true,
         });
       }
@@ -106,7 +110,27 @@ function injectPageBridge() {
 
         const contentType = response.headers.get("content-type") || "";
         if (detectChallenge(contentType, "")) {
-          challengeError(jobId);
+          challengeError(jobId, contentType, "");
+          return;
+        }
+
+        if (response.status >= 400) {
+          let errorText = "";
+          try {
+            errorText = await response.text();
+          } catch (error) {
+            errorText = "";
+          }
+          const preview = String(errorText || "").slice(0, BODY_PREVIEW_BYTES);
+          if (detectChallenge(contentType, preview)) {
+            challengeError(jobId, contentType, preview);
+            return;
+          }
+          sendUpdate(jobId, {
+            body_preview: preview,
+            body_preview_content_type: contentType,
+            done: true,
+          });
           return;
         }
 
@@ -117,7 +141,7 @@ function injectPageBridge() {
         if (!reader) {
           const text = await response.text();
           if (detectChallenge(contentType, text)) {
-            challengeError(jobId);
+            challengeError(jobId, contentType, text);
             return;
           }
           const batcher = createBatcher(jobId);
@@ -151,7 +175,7 @@ function injectPageBridge() {
               } catch (error) {
                 // ignore
               }
-              challengeError(jobId);
+              challengeError(jobId, contentType, sample);
               return;
             }
             checkedChallenge = sample.length >= CHALLENGE_CHECK_BYTES;
@@ -215,16 +239,18 @@ function forwardUpdate(data) {
   if (!activeJobId || data.jobId !== activeJobId) {
     return;
   }
-  const update = {
-    type: "lmbridge-proxy-update",
-    jobId: data.jobId,
-    status: data.status,
-    headers: data.headers,
-    lines: data.lines,
-    error: data.error,
-    done: data.done,
-    upstream_fetch_started: data.upstream_fetch_started,
-  };
+    const update = {
+      type: "lmbridge-proxy-update",
+      jobId: data.jobId,
+      status: data.status,
+      headers: data.headers,
+      lines: data.lines,
+      error: data.error,
+      body_preview: data.body_preview,
+      body_preview_content_type: data.body_preview_content_type,
+      done: data.done,
+      upstream_fetch_started: data.upstream_fetch_started,
+    };
   extensionApi.runtime.sendMessage(update);
   if (data.done) {
     activeJobId = null;

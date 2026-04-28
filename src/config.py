@@ -59,17 +59,21 @@ def get_config() -> dict:
 def _apply_config_defaults(config: dict) -> None:
     """Apply default values to config dictionary."""
     config.setdefault("password", "admin")
-    config.setdefault("auth_token", "")
-    config.setdefault("auth_tokens", [])
-    config.setdefault("cf_clearance", "")
     config.setdefault("api_keys", [])
     config.setdefault("usage_stats", {})
-    config.setdefault("prune_invalid_tokens", False)
-    config.setdefault("persist_arena_auth_cookie", True)
-    config.setdefault("camoufox_proxy_window_mode", constants.DEFAULT_CAMOUFOX_PROXY_WINDOW_MODE)
-    config.setdefault("camoufox_fetch_window_mode", constants.DEFAULT_CAMOUFOX_FETCH_WINDOW_MODE)
-    config.setdefault("chrome_fetch_window_mode", constants.DEFAULT_CHROME_FETCH_WINDOW_MODE)
-    config.setdefault("prefer_userscript_proxy_for_streaming", False)
+    config.setdefault("userscript_proxy_secret", "")
+    config.setdefault(
+        "userscript_proxy_poll_timeout_seconds",
+        constants.DEFAULT_USERSCRIPT_PROXY_POLL_TIMEOUT_SECONDS,
+    )
+    config.setdefault(
+        "userscript_proxy_job_ttl_seconds",
+        constants.DEFAULT_USERSCRIPT_PROXY_JOB_TTL_SECONDS,
+    )
+    config.setdefault(
+        "userscript_proxy_pickup_timeout_seconds",
+        constants.DEFAULT_USERSCRIPT_PROXY_PICKUP_TIMEOUT_SECONDS,
+    )
     
     # Normalize api_keys
     if isinstance(config.get("api_keys"), list):
@@ -88,7 +92,7 @@ def _apply_config_defaults(config: dict) -> None:
         config["api_keys"] = normalized_keys
 
 
-def save_config(config: dict, *, preserve_auth_tokens: bool = True) -> None:
+def save_config(config: dict) -> None:
     """
     Save configuration to file.
     
@@ -97,21 +101,8 @@ def save_config(config: dict, *, preserve_auth_tokens: bool = True) -> None:
         preserve_auth_tokens: If True, don't overwrite auth tokens from disk
     """
     try:
-        if preserve_auth_tokens:
-            try:
-                with open(_current_config_file, "r") as f:
-                    on_disk = json.load(f)
-            except Exception:
-                on_disk = None
-
-            if isinstance(on_disk, dict):
-                if "auth_tokens" in on_disk and isinstance(on_disk.get("auth_tokens"), list):
-                    config["auth_tokens"] = list(on_disk.get("auth_tokens") or [])
-                if "auth_token" in on_disk:
-                    config["auth_token"] = str(on_disk.get("auth_token") or "")
-
         # usage_stats will be set by the caller
-        
+
         tmp_path = f"{_current_config_file}.tmp"
         with open(tmp_path, "w") as f:
             json.dump(config, f, indent=4)
@@ -167,9 +158,6 @@ def get_default_config() -> dict:
     """Get default configuration values."""
     return {
         "password": "admin",
-        "auth_token": "",
-        "auth_tokens": [],
-        "cf_clearance": "",
         "api_keys": [
             {
                 "name": "Default Key",
@@ -179,10 +167,8 @@ def get_default_config() -> dict:
             }
         ],
         "usage_stats": {},
-        "prune_invalid_tokens": False,
-        "persist_arena_auth_cookie": True,
-        "camoufox_proxy_window_mode": constants.DEFAULT_CAMOUFOX_PROXY_WINDOW_MODE,
-        "camoufox_fetch_window_mode": constants.DEFAULT_CAMOUFOX_FETCH_WINDOW_MODE,
-        "chrome_fetch_window_mode": constants.DEFAULT_CHROME_FETCH_WINDOW_MODE,
-        "prefer_userscript_proxy_for_streaming": False,
+        "userscript_proxy_secret": "",
+        "userscript_proxy_poll_timeout_seconds": constants.DEFAULT_USERSCRIPT_PROXY_POLL_TIMEOUT_SECONDS,
+        "userscript_proxy_job_ttl_seconds": constants.DEFAULT_USERSCRIPT_PROXY_JOB_TTL_SECONDS,
+        "userscript_proxy_pickup_timeout_seconds": constants.DEFAULT_USERSCRIPT_PROXY_PICKUP_TIMEOUT_SECONDS,
     }
