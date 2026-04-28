@@ -20,10 +20,6 @@ current_token_index: int = 0
 # Config file tracking
 _last_config_file: Optional[str] = None
 
-# Conversation tracking (legacy/no-op in proxy-only mode)
-conversation_tokens: Dict[str, str] = {}
-request_failed_tokens: Dict[str, set] = {}
-
 # Image cache: { md5_hash: { key: str, url: str, expiry: float } }
 IMAGES_CACHE: Dict[str, dict] = {}
 

@@ -227,7 +227,7 @@ async def upload_image_to_lmarena(image_data: bytes, mime_type: str, filename: s
     raise HTTPException(
         status_code=503,
         detail=(
-            "Image upload is unavailable in proxy-only mode."
+            "Image upload is unavailable in proxy-only mode. Use text-only prompts."
         ),
     )
 
@@ -289,7 +289,7 @@ async def process_message_content(content, model_capabilities: dict) -> tuple[st
                     raise HTTPException(
                         status_code=503,
                         detail=(
-                            "Image inputs are unavailable in proxy-only mode."
+                            "Image inputs are unavailable in proxy-only mode. Use text-only prompts."
                         ),
                     )
                 elif part.get('type') == 'image_url' and not supports_images:
@@ -733,7 +733,10 @@ async def dashboard(session: str = Depends(get_current_session)):
         """
     
     if not models_html:
-        models_html = '<div class="no-data">No models cached. Refresh models via the userscript proxy.</div>'
+        models_html = (
+            '<div class="no-data">No models cached. Use the dashboard button to refresh via the userscript '
+            'proxy.</div>'
+        )
 
     proxy_active = _userscript_proxy_is_active(config)
     proxy_status_label = "Active" if proxy_active else "Inactive"

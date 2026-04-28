@@ -100,7 +100,7 @@ def save_config(config: dict) -> None:
         config: Configuration dictionary to save
     """
     try:
-        # usage_stats will be set by the caller
+        # usage_stats will be set by the caller; other values are saved as-is.
 
         tmp_path = f"{_current_config_file}.tmp"
         with open(tmp_path, "w") as f:

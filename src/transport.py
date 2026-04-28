@@ -37,7 +37,7 @@ class BrowserFetchStreamResponse:
         url: str = "",
         lines_queue: Optional[asyncio.Queue] = None,
         done_event: Optional[asyncio.Event] = None,
-        job_id: str | None = None,
+        job_id: Optional[str] = None,
     ):
         self.status_code = int(status_code or 0)
         self.headers = headers or {}
@@ -332,8 +332,8 @@ class UserscriptProxyStreamResponse:
     async def aclose(self) -> None:
         # Do not eagerly delete completed jobs here.
         #
-        # Callers may need to inspect `status_code`/`error` after the context exits. Jobs are pruned by
-        # `_cleanup_userscript_proxy_jobs()` on a short TTL.
+        # Callers may need to inspect `status_code`/`error` after the context exits for diagnostics or
+        # to build error responses. Jobs are pruned by `_cleanup_userscript_proxy_jobs()` on a short TTL.
         return None
 
     async def aiter_lines(self):
