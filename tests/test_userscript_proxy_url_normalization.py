@@ -12,6 +12,10 @@ class TestUserscriptProxyUrlNormalization(BaseBridgeTest):
             "/nextjs-api/sign-up?x=1",
         )
         self.assertEqual(
+            self.main._normalize_userscript_proxy_url("https://lmarena.ai/nextjs-api/stream/create-evaluation"),
+            "/nextjs-api/stream/create-evaluation",
+        )
+        self.assertEqual(
             self.main._normalize_userscript_proxy_url("/nextjs-api/stream/create-evaluation"),
             "/nextjs-api/stream/create-evaluation",
         )

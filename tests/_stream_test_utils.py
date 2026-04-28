@@ -81,7 +81,7 @@ class BaseBridgeTest(unittest.IsolatedAsyncioTestCase):
         self.setup_config(
             {
                 "password": "admin",
-                "userscript_proxy_secret": "",
+                "userscript_proxy_secret": "test-secret-123",
                 "api_keys": [{"name": "Test Key", "key": "test-key", "rpm": 999}],
             }
         )

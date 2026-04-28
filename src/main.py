@@ -227,7 +227,7 @@ async def upload_image_to_lmarena(image_data: bytes, mime_type: str, filename: s
     raise HTTPException(
         status_code=503,
         detail=(
-            "Image upload is unavailable in proxy-only mode. The userscript proxy does not support image uploads yet."
+            "Image upload is unavailable in proxy-only mode. The userscript proxy does not support image uploads."
         ),
     )
 
@@ -289,7 +289,7 @@ async def process_message_content(content, model_capabilities: dict) -> tuple[st
                     raise HTTPException(
                         status_code=503,
                         detail=(
-                            "Image inputs are unavailable in proxy-only mode. The userscript proxy does not support image uploads yet."
+                            "Image inputs are unavailable in proxy-only mode. The userscript proxy does not support image uploads."
                         ),
                     )
                 elif part.get('type') == 'image_url' and not supports_images:
@@ -1915,7 +1915,7 @@ async def api_chat_completions(request: Request, api_key: dict = Depends(rate_li
                 if stream_context is None:
                     error_message = (
                         "Userscript proxy did not pick up the job in time. "
-                        "Ensure Firefox is running with the extension active and an Arena tab open."
+                        "Ensure Firefox is running with the extension active and an arena.ai/lmarena.ai tab open."
                     )
                     error_chunk = {
                         "error": {
@@ -2153,7 +2153,7 @@ async def api_chat_completions(request: Request, api_key: dict = Depends(rate_li
                 status_code=504,
                 detail=(
                     "Userscript proxy did not pick up the job in time. "
-                    "Ensure Firefox is running with the extension active and an Arena tab open."
+                    "Ensure Firefox is running with the extension active and an arena.ai/lmarena.ai tab open."
                 ),
             )
 
