@@ -4,6 +4,3 @@ venv/
 config.json
 .pytest_cache/
 __pycache__/
-chrome_grecaptcha/
-grecaptcha/
-camoufox_fetch/

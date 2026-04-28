@@ -332,8 +332,8 @@ class UserscriptProxyStreamResponse:
     async def aclose(self) -> None:
         # Do not eagerly delete completed jobs here.
         #
-        # Callers may need to inspect `status_code`/`error` after the context exits (e.g. to decide whether to
-        # fall back to Chrome fetch). Jobs are pruned by `_cleanup_userscript_proxy_jobs()` on a short TTL.
+        # Callers may need to inspect `status_code`/`error` after the context exits. Jobs are pruned by
+        # `_cleanup_userscript_proxy_jobs()` on a short TTL.
         return None
 
     async def aiter_lines(self):
@@ -525,9 +525,7 @@ async def fetch_via_proxy_queue(
     streaming: bool = False,
     headers: Optional[dict] = None,
 ) -> Optional[object]:
-    """
-    Fallback transport: delegates the request to a connected Userscript via the Task Queue.
-    """
+    """Delegate the request to a connected userscript proxy via the task queue."""
     # Prefer the streaming-capable proxy endpoints when available.
     proxy_stream = await _m().fetch_lmarena_stream_via_userscript_proxy(
         http_method=http_method,

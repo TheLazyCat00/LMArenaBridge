@@ -98,7 +98,6 @@ def save_config(config: dict) -> None:
     
     Args:
         config: Configuration dictionary to save
-        preserve_auth_tokens: If True, don't overwrite auth tokens from disk
     """
     try:
         # usage_stats will be set by the caller

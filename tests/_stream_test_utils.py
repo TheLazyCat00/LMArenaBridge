@@ -63,12 +63,10 @@ class BaseBridgeTest(unittest.IsolatedAsyncioTestCase):
 
         self.main.chat_sessions.clear()
         self.main.api_key_usage.clear()
+        # Ensure userscript-proxy state doesn't leak across tests.
         try:
-            # Ensure userscript-proxy state doesn't leak across tests.
             self.main._USERSCRIPT_PROXY_JOBS.clear()
             self.main._USERSCRIPT_PROXY_QUEUE = None
-            self.main.proxy_pending_tasks.clear()
-            self.main.proxy_task_queue.clear()
             self.main._mark_userscript_proxy_inactive()
         except Exception:
             pass
@@ -83,8 +81,7 @@ class BaseBridgeTest(unittest.IsolatedAsyncioTestCase):
         self.setup_config(
             {
                 "password": "admin",
-                "cf_clearance": "",
-                "auth_tokens": ["auth-token-1"],
+                "userscript_proxy_secret": "",
                 "api_keys": [{"name": "Test Key", "key": "test-key", "rpm": 999}],
             }
         )

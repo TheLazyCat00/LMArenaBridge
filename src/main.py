@@ -227,8 +227,7 @@ async def upload_image_to_lmarena(image_data: bytes, mime_type: str, filename: s
     raise HTTPException(
         status_code=503,
         detail=(
-            "Image upload is unavailable in proxy-only mode. "
-            "Refresh models via the userscript proxy to restore this feature."
+            "Image upload is unavailable in proxy-only mode."
         ),
     )
 
@@ -290,8 +289,7 @@ async def process_message_content(content, model_capabilities: dict) -> tuple[st
                     raise HTTPException(
                         status_code=503,
                         detail=(
-                            "Image inputs are unavailable in proxy-only mode. "
-                            "Refresh models via the userscript proxy to restore this feature."
+                            "Image inputs are unavailable in proxy-only mode."
                         ),
                     )
                 elif part.get('type') == 'image_url' and not supports_images:
@@ -1830,7 +1828,7 @@ async def api_chat_completions(request: Request, api_key: dict = Depends(rate_li
                     "metadata": {}
                 },
                 "modality": modality,
-                "recaptchaV3Token": recaptcha_token, # <--- ADD TOKEN HERE
+                "recaptchaV3Token": recaptcha_token,
             }
             url = f"https://arena.ai{STREAM_CREATE_EVALUATION_PATH}"
             debug_print(f"📤 Target URL: {url}")
@@ -1859,7 +1857,7 @@ async def api_chat_completions(request: Request, api_key: dict = Depends(rate_li
                     "metadata": {}
                 },
                 "modality": modality,
-                "recaptchaV3Token": recaptcha_token, # <--- ADD TOKEN HERE
+                "recaptchaV3Token": recaptcha_token,
             }
             url = f"https://arena.ai/nextjs-api/stream/post-to-evaluation/{session['conversation_id']}"
             debug_print(f"📤 Target URL: {url}")
